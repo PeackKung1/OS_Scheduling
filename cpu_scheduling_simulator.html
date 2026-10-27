@@ -1,0 +1,1722 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CPU Scheduling Simulator - Interactive & Synchronized</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#eef2ff',
+                            100: '#e0e7ff',
+                            500: '#6366f1',
+                            600: '#4f46e5',
+                            700: '#4338ca',
+                            900: '#312e81',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Chart.js for Multi-Algorithm Benchmark -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+        code, pre, .font-mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        ::-webkit-scrollbar {
+            height: 7px;
+            width: 7px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #090d16;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #27354a;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #3b4e6b;
+        }
+        .pulse-subtle {
+            animation: pulseSubtle 1.8s infinite;
+        }
+        @keyframes pulseSubtle {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.92; transform: scale(1.02); }
+        }
+        #dynamicGanttTooltip {
+            pointer-events: none;
+            transition: opacity 0.12s ease-out, transform 0.08s ease-out;
+            transform: translate(-50%, -120%);
+        }
+        /* Smooth moving timeline playhead with dynamic color glow */
+        #timelinePlayhead {
+            transition: left 0.08s linear, background-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        #playheadPin {
+            transition: background-color 0.2s ease, border-color 0.2s ease;
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col selection:bg-indigo-500 selection:text-white relative">
+
+    <!-- Floating Hover Tooltip -->
+    <div id="dynamicGanttTooltip" class="fixed z-50 opacity-0 pointer-events-none bg-slate-900/95 backdrop-blur-md border border-slate-700/80 px-3 py-2 rounded-xl shadow-2xl shadow-black/80 font-mono text-xs flex flex-col gap-1 min-w-[160px]">
+        <div class="flex items-center justify-between gap-3 border-b border-slate-800 pb-1">
+            <span id="ttPid" class="font-bold flex items-center gap-1.5 text-sm text-white">
+                <span id="ttColorDot" class="w-2.5 h-2.5 rounded-full inline-block"></span>
+                <span id="ttPidText">P1</span>
+            </span>
+            <span id="ttBadge" class="text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">RUNNING</span>
+        </div>
+        <div class="flex items-center justify-between text-[11px] text-slate-300 pt-0.5">
+            <span class="text-slate-400">Interval:</span>
+            <span id="ttSpan" class="font-semibold text-slate-100">0ms ➔ 4ms</span>
+        </div>
+        <div class="flex items-center justify-between text-[11px] text-slate-300">
+            <span class="text-slate-400">Duration:</span>
+            <span id="ttDuration" class="font-bold text-amber-300">4 ms</span>
+        </div>
+    </div>
+
+    <!-- Header Section -->
+    <header class="border-b border-slate-800 bg-slate-900/90 backdrop-blur sticky top-0 z-40 px-4 lg:px-8 py-3 flex items-center justify-between gap-4">
+        <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center shadow-lg shadow-indigo-500/25">
+                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+                </svg>
+            </div>
+            <div>
+                <h1 class="text-lg font-bold tracking-tight text-white flex items-center gap-2">
+                    CPU Scheduling Simulator
+                    <span class="text-xs px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">Pro Edition</span>
+                </h1>
+                <p class="text-xs text-slate-400">Synchronized CPU & Process Timelines with Floating Context Tracking</p>
+            </div>
+        </div>
+
+        <button onclick="openComparisonModal()" class="text-xs px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-semibold shadow-md shadow-indigo-600/25 flex items-center gap-2 transition active:scale-95">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+            <span>Compare All Algorithms</span>
+        </button>
+    </header>
+
+    <!-- Top Action & Execution Toolbar -->
+    <div class="bg-slate-900 border-b border-slate-800 px-4 lg:px-8 py-2.5 flex flex-wrap items-center justify-between gap-4">
+        <!-- Demo Presets -->
+        <div class="flex items-center space-x-2">
+            <span class="text-xs font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-1">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                Presets:
+            </span>
+            <button onclick="loadPreset('convoy')" class="text-xs px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 hover:text-white transition flex items-center gap-1">
+                <span>⚡ Case 1: Convoy</span>
+            </button>
+            <button onclick="loadPreset('rr_quantum')" class="text-xs px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 hover:text-white transition flex items-center gap-1">
+                <span>⏱ Case 2: RR Quantum</span>
+            </button>
+            <button onclick="loadPreset('aging')" class="text-xs px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 hover:text-white transition flex items-center gap-1">
+                <span>🛡 Case 3: Aging</span>
+            </button>
+            <button onclick="generateMassiveProcesses(50)" class="text-xs px-3 py-1.5 rounded-lg bg-violet-900/40 hover:bg-violet-800/50 border border-violet-700/60 text-violet-200 transition font-semibold">
+                <span>🚀 Stress Test (50 Procs)</span>
+            </button>
+        </div>
+
+        <!-- Simulation Controls + Compact Speed Selector -->
+        <div class="flex items-center space-x-3">
+            <!-- Compact Speed Switcher -->
+            <div class="flex items-center bg-slate-950/80 px-2 py-1 rounded-xl border border-slate-800/80 text-[11px] font-mono">
+                <span class="text-slate-500 mr-2 text-[10px] uppercase font-bold tracking-wider">Speed</span>
+                <div class="flex items-center space-x-0.5">
+                    <button onclick="setSimSpeed(1000, this)" class="speed-btn px-2 py-0.5 rounded text-slate-400 hover:text-slate-200 transition">0.5x</button>
+                    <button onclick="setSimSpeed(500, this)" class="speed-btn px-2 py-0.5 rounded bg-slate-800 text-indigo-400 font-bold border border-slate-700 transition">1x</button>
+                    <button onclick="setSimSpeed(100, this)" class="speed-btn px-2 py-0.5 rounded text-slate-400 hover:text-slate-200 transition">5x</button>
+                    <button onclick="setSimSpeed(20, this)" class="speed-btn px-2 py-0.5 rounded text-slate-400 hover:text-slate-200 transition">20x</button>
+                </div>
+            </div>
+
+            <!-- Main Playback Controls -->
+            <div class="flex items-center space-x-1.5 bg-slate-950/80 p-1 rounded-xl border border-slate-800">
+                <button id="stepBtn" onclick="stepSimulation()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold rounded-lg transition flex items-center gap-1">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"/></svg>
+                    Step (+1)
+                </button>
+                <button id="playBtn" onclick="togglePlaySimulation()" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-lg transition flex items-center gap-1.5 shadow-md shadow-indigo-600/30">
+                    <svg id="playIcon" class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"/></svg>
+                    <span id="playText">Play</span>
+                </button>
+                <button onclick="jumpToEnd()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-medium rounded-lg transition" title="Jump to Finish">
+                    ⏭ Finish
+                </button>
+                <button onclick="resetSimulation()" class="px-2.5 py-1.5 bg-slate-800/80 hover:bg-rose-950/40 hover:text-rose-300 text-slate-400 border border-slate-700 text-xs font-medium rounded-lg transition" title="Reset Timeline">
+                    ↺ Reset
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <main class="flex-1 p-4 lg:p-8 max-w-[1750px] w-full mx-auto grid grid-cols-1 xl:grid-cols-12 gap-6">
+
+        <!-- LEFT COLUMN: Process Table + Dispatcher Settings -->
+        <div class="xl:col-span-4 space-y-6">
+
+            <!-- Process Control Blocks (PCB) Manager -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <h2 class="text-sm font-bold tracking-wide uppercase text-slate-200">Process Control Blocks (PCB)</h2>
+                        <p class="text-xs text-slate-400">Configure task pool for execution</p>
+                    </div>
+                    <div class="flex items-center space-x-1.5">
+                        <button onclick="addProcessRow()" class="px-2.5 py-1 text-xs font-medium rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 transition">+ Add</button>
+                        <button onclick="generateRandomProcesses(5)" class="px-2.5 py-1 text-xs font-medium rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 transition font-semibold">🎲 Random</button>
+                        <button onclick="clearProcesses()" class="px-2 py-1 text-xs font-medium rounded-lg bg-rose-950/40 hover:bg-rose-900/40 text-rose-300 border border-rose-800/40 transition">Clear</button>
+                    </div>
+                </div>
+
+                <!-- Process Input Table -->
+                <div class="overflow-x-auto max-h-[310px] border border-slate-800 rounded-xl">
+                    <table class="w-full text-xs text-left">
+                        <thead class="bg-slate-800/70 text-slate-300 sticky top-0 z-10">
+                            <tr>
+                                <th class="p-2.5">PID</th>
+                                <th class="p-2.5">Arrival (AT)</th>
+                                <th class="p-2.5">Burst (BT)</th>
+                                <th class="p-2.5">Priority</th>
+                                <th class="p-2.5 text-center">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="processTableBody" class="divide-y divide-slate-800 font-mono">
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="mt-3 flex items-center justify-between text-[11px] text-slate-400 px-1">
+                    <span class="flex items-center gap-1.5">
+                        <span class="w-2 h-2 rounded-full bg-indigo-500 inline-block"></span>
+                        Lower number = Higher Priority
+                    </span>
+                    <span id="processCountBadge" class="font-semibold text-slate-300">3 Processes</span>
+                </div>
+            </div>
+
+            <!-- Algorithm Settings & Dispatcher Config -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-sm font-bold tracking-wide uppercase text-slate-200">Dispatcher & Evaluation Setup</h2>
+                    <span id="optimalNoticeBadge" class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 hidden font-mono">🏆 Best Picked</span>
+                </div>
+
+                <div class="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+                    <label class="block text-xs font-semibold text-amber-400 mb-1 flex items-center justify-between">
+                        <span>🎯 "Best Algorithm" Criterion</span>
+                        <span class="text-[10px] text-slate-400 font-normal">Auto-selected on random</span>
+                    </label>
+                    <select id="evalTargetSelect" onchange="handleTargetChange()" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-amber-500">
+                        <option value="BALANCED">⚖ Real-World OS: Balanced (AWT + Switch Penalty + Fairness)</option>
+                        <option value="RESPONSE">⚡ Interactive OS: Best Response Time (Fast Start)</option>
+                        <option value="PRIORITY">🛡️ Critical Systems: Highest Priority Compliance</option>
+                        <option value="THEORETICAL">📐 Pure Theory: Lowest AWT (SRTF Bias)</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-medium text-slate-400 mb-1.5 flex items-center justify-between">
+                        <span>Active Scheduling Policy</span>
+                        <span id="optimalAlgoHint" class="text-[11px] text-emerald-400 font-mono"></span>
+                    </label>
+                    <select id="algoSelect" onchange="handleAlgorithmChange()" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 focus:outline-none focus:border-indigo-500 font-medium">
+                        <option value="FCFS">First-Come, First-Served (FCFS)</option>
+                        <option value="SJF_NP">Shortest-Job-First (Non-Preemptive SJF)</option>
+                        <option value="SRTF">Shortest-Remaining-Time-First (Preemptive SJF)</option>
+                        <option value="RR">Round Robin (RR)</option>
+                        <option value="PRIORITY_NP">Priority Scheduling (Non-Preemptive)</option>
+                        <option value="PRIORITY_P">Priority Scheduling (Preemptive + Aging)</option>
+                    </select>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3 pt-1">
+                    <div id="quantumContainer" class="p-3 bg-slate-800/50 rounded-xl border border-slate-700/60 transition">
+                        <label class="block text-[11px] font-semibold text-slate-300 mb-1 flex items-center justify-between">
+                            <span>Time Quantum (q)</span>
+                            <span id="quantumDisplay" class="text-indigo-400 font-mono">4</span>
+                        </label>
+                        <input id="timeQuantum" type="range" min="1" max="15" value="4" oninput="updateQuantum(this.value)" class="w-full accent-indigo-500 cursor-pointer">
+                    </div>
+
+                    <div id="agingContainer" class="p-3 bg-slate-800/50 rounded-xl border border-slate-700/60 transition">
+                        <label class="block text-[11px] font-semibold text-slate-300 mb-1 flex items-center justify-between">
+                            <span>Aging Step (ticks)</span>
+                            <span id="agingDisplay" class="text-indigo-400 font-mono">0 (Off)</span>
+                        </label>
+                        <input id="agingInterval" type="range" min="0" max="10" value="0" oninput="updateAging(this.value)" class="w-full accent-indigo-500 cursor-pointer">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- RIGHT COLUMN: Live Execution Gantt, Ready Queue & Analytics -->
+        <div class="xl:col-span-8 space-y-6">
+
+            <!-- Real-Time CPU Dispatcher & Ready Queue View -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-center justify-between shadow-lg">
+                    <div>
+                        <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">CPU Dispatcher</span>
+                        <div class="mt-1 flex items-center space-x-2">
+                            <span id="cpuRunningBadge" class="text-xl font-black font-mono text-slate-400">IDLE</span>
+                            <span id="cpuStatusTag" class="text-[10px] px-2 py-0.5 rounded font-mono border">IDLE</span>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">System Time</span>
+                        <div id="currentTickLabel" class="text-2xl font-black font-mono text-indigo-400">0 ms</div>
+                    </div>
+                </div>
+
+                <div class="md:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-lg flex flex-col justify-between">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                            <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+                            Ready Queue (Waiting for CPU)
+                        </span>
+                        <span id="readyQueueCount" class="text-xs font-mono text-slate-400">0 queued</span>
+                    </div>
+                    <div id="readyQueueItems" class="flex items-center space-x-2 overflow-x-auto min-h-[44px] py-1">
+                        <span class="text-xs text-slate-500 italic">Queue is currently empty</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Fully Synced Gantt System -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
+                <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800/80 pb-3">
+                    <div>
+                        <h2 class="text-sm font-bold tracking-wide uppercase text-slate-200 flex items-center gap-2">
+                            Synchronized Execution Timeline
+                            <span id="ganttAlgoBadge" class="text-[11px] normal-case px-2.5 py-0.5 rounded-full bg-slate-800 text-indigo-300 border border-slate-700 font-mono">FCFS</span>
+                        </h2>
+                        <p class="text-xs text-slate-400">Hover any segment for instant process & execution details</p>
+                    </div>
+
+                    <!-- Zoom Controls & View Filter -->
+                    <div class="flex items-center space-x-2">
+                        <div class="flex items-center space-x-1.5 bg-slate-950 px-2.5 py-1 rounded-xl border border-slate-800 text-xs">
+                            <input type="checkbox" id="filterRunningOnly" onchange="recomputeFullSimulation()" class="accent-indigo-500 cursor-pointer rounded">
+                            <label for="filterRunningOnly" class="text-[11px] text-slate-300 cursor-pointer select-none">Hide Finished</label>
+                        </div>
+
+                        <div class="flex items-center bg-slate-950 rounded-xl border border-slate-800 p-0.5 font-mono text-xs">
+                            <button onclick="adjustZoom(-0.25)" class="px-2 py-1 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition font-bold" title="Zoom Out (−)">−</button>
+                            <span id="zoomDisplay" class="px-2 text-slate-300 text-[11px]">Fit</span>
+                            <button onclick="adjustZoom(0.25)" class="px-2 py-1 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition font-bold" title="Zoom In (+)">+</button>
+                            <button onclick="resetZoom()" class="px-2 py-1 text-indigo-400 hover:text-indigo-300 border-l border-slate-800 text-[10px]">Fit</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Unified Timeline Chart Surface -->
+                <div class="border border-slate-800 rounded-xl bg-slate-950 overflow-x-auto shadow-inner relative pt-6" id="timelineScrollWrapper">
+                    
+                    <div id="timelineContentWrapper" class="min-w-full flex">
+                        
+                        <!-- Fixed Left Process Label Column -->
+                        <div class="w-32 flex-shrink-0 sticky left-0 z-30 bg-slate-950 px-3.5 py-4 border-r border-slate-800 shadow-[8px_0_16px_rgba(0,0,0,0.9)] space-y-2 select-none">
+                            <!-- CPU Core Label -->
+                            <div class="h-10 flex items-center justify-between">
+                                <div>
+                                    <span class="text-xs font-bold text-slate-200 font-mono flex items-center gap-1.5">
+                                        <span class="relative flex h-2 w-2">
+                                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                            <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                        </span>
+                                        CPU CORE
+                                    </span>
+                                    <span class="text-[10px] text-slate-500 font-mono block">Dispatcher</span>
+                                </div>
+                                <span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-mono font-semibold">C0</span>
+                            </div>
+
+                            <div class="border-t border-slate-800/80 my-2 pt-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                                Processes
+                            </div>
+
+                            <!-- Process Left Labels -->
+                            <div id="processLabelsColumn" class="space-y-1.5">
+                            </div>
+
+                            <!-- Ruler Label -->
+                            <div class="border-t border-slate-800/80 pt-2 h-6 flex items-center justify-end text-[10px] font-mono font-semibold text-slate-500">
+                                TIME (ms) ➔
+                            </div>
+                        </div>
+
+                        <!-- Right Tracks Surface with Dynamic Colored Playhead -->
+                        <div class="flex-1 relative space-y-2 py-4 pr-4 pl-0" id="tracksContainer">
+                            
+                            <!-- Dynamic Running Playhead (เรืองแสง ชัดเจน ไม่โดนตัดขอบ) -->
+                            <div id="timelinePlayhead" class="absolute top-0 bottom-4 w-[2px] pointer-events-none z-20 flex flex-col items-center" style="left: 0%; background-color: #38bdf8; box-shadow: 0 0 10px #38bdf8, 0 0 20px #38bdf8;">
+                                <div id="playheadBadge" class="font-mono text-[10px] font-black px-2 py-0.5 rounded shadow-xl -translate-y-full mb-1 select-none border border-slate-700 bg-slate-900 text-white flex items-center gap-1.5 whitespace-nowrap">
+                                    <span id="playheadPidText">P1</span>
+                                    <span class="opacity-50">|</span>
+                                    <span id="playheadTimeText">0ms</span>
+                                </div>
+                                <div id="playheadPin" class="w-2 h-2 rotate-45 -mt-1 bg-sky-400 shadow"></div>
+                            </div>
+
+                            <!-- 1. CPU Execution Bar -->
+                            <div class="h-10 rounded-r-xl border-y border-r border-slate-700/80 bg-slate-900/90 shadow-lg relative overflow-hidden flex" id="ganttBarContainer">
+                            </div>
+
+                            <!-- Divider Title -->
+                            <div class="border-t border-slate-800/80 my-2 flex items-center justify-between text-[11px] text-slate-400 pt-1 px-1">
+                                <span class="text-[10px] text-slate-500 font-mono">(Hover over any block to inspect details)</span>
+                                <span class="text-slate-500 font-mono">0ms ➔ <span id="ganttTotalTime" class="text-slate-200 font-bold">0 ms</span></span>
+                            </div>
+
+                            <!-- 2. Individual Process Bars -->
+                            <div id="multiRowGanttContainer" class="space-y-1.5 w-full">
+                            </div>
+
+                            <!-- 3. Ruler Ticks -->
+                            <div class="relative h-6 text-[10px] font-mono text-slate-400 border-t border-slate-800/80 pt-1" id="sharedTicksContainer">
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- Hover Details Banner -->
+                <div id="ganttInfoBanner" class="text-xs text-slate-400 bg-slate-800/40 p-2.5 rounded-lg border border-slate-800 flex items-center justify-between">
+                    <span>💡 <strong>Tip:</strong> เส้นแถบวิ่งแนวตั้งสีนีออนจะวิ่งและปรับสีตาม Process ที่กำลังได้รับ CPU ณ เวลาปัจจุบัน</span>
+                    <span id="ganttSliceDetail" class="font-mono text-indigo-300 font-medium">Ready</span>
+                </div>
+            </div>
+
+            <!-- Performance Metrics Cards -->
+            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-3.5 shadow">
+                    <div class="text-[11px] uppercase tracking-wider text-slate-400 font-semibold">Avg Waiting Time</div>
+                    <div id="metricAvgWT" class="text-xl font-bold font-mono text-amber-400 mt-1">0.00 <span class="text-xs text-slate-500">ms</span></div>
+                </div>
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-3.5 shadow">
+                    <div class="text-[11px] uppercase tracking-wider text-slate-400 font-semibold">Avg Turnaround</div>
+                    <div id="metricAvgTAT" class="text-xl font-bold font-mono text-indigo-400 mt-1">0.00 <span class="text-xs text-slate-500">ms</span></div>
+                </div>
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-3.5 shadow">
+                    <div class="text-[11px] uppercase tracking-wider text-slate-400 font-semibold">Avg Response Time</div>
+                    <div id="metricAvgRT" class="text-xl font-bold font-mono text-teal-400 mt-1">0.00 <span class="text-xs text-slate-500">ms</span></div>
+                </div>
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-3.5 shadow">
+                    <div class="text-[11px] uppercase tracking-wider text-slate-400 font-semibold">CPU Utilization</div>
+                    <div id="metricCPUUtil" class="text-xl font-bold font-mono text-emerald-400 mt-1">100.0 <span class="text-xs text-slate-500">%</span></div>
+                </div>
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-3.5 shadow col-span-2 sm:col-span-1">
+                    <div class="text-[11px] uppercase tracking-wider text-slate-400 font-semibold">Context Switches</div>
+                    <div id="metricContextSwitches" class="text-xl font-bold font-mono text-rose-400 mt-1">0 <span class="text-xs text-slate-500">switches</span></div>
+                </div>
+            </div>
+
+            <!-- Complete Results Table -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
+                <h2 class="text-sm font-bold tracking-wide uppercase text-slate-200 mb-3">Individual Process Metrics Breakdown</h2>
+                <div class="overflow-x-auto max-h-[350px] border border-slate-800 rounded-xl">
+                    <table class="w-full text-xs text-left">
+                        <thead class="bg-slate-800/90 text-slate-300 font-medium sticky top-0 z-10">
+                            <tr>
+                                <th class="p-2.5">PID</th>
+                                <th class="p-2.5">Arrival (AT)</th>
+                                <th class="p-2.5">Burst (BT)</th>
+                                <th class="p-2.5">Completion (CT)</th>
+                                <th class="p-2.5">Turnaround (TAT = CT - AT)</th>
+                                <th class="p-2.5">Waiting (WT = TAT - BT)</th>
+                                <th class="p-2.5">Response (RT = 1st Run - AT)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="metricsTableBody" class="divide-y divide-slate-800 font-mono text-slate-200">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Comparison Modal -->
+    <div id="comparisonModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 hidden">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-5xl max-h-[92vh] overflow-y-auto shadow-2xl p-6 space-y-6">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-4">
+                <div>
+                    <h2 class="text-lg font-bold text-white flex items-center gap-2">
+                        Benchmark Comparison: All 6 Algorithms
+                        <span class="text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Multi-Metric Engine</span>
+                    </h2>
+                    <p class="text-xs text-slate-400">Comparing Waiting, Turnaround, Response Times, and Context Switching Overhead.</p>
+                </div>
+                <button onclick="closeComparisonModal()" class="text-slate-400 hover:text-white p-2 rounded-lg hover:bg-slate-800 transition">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+
+            <div class="bg-slate-950 p-4 rounded-xl border border-slate-800">
+                <h3 class="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Average Waiting Time (WT) & Turnaround Time (TAT) Comparison</h3>
+                <div class="h-64">
+                    <canvas id="comparisonChart"></canvas>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto border border-slate-800 rounded-xl">
+                <table class="w-full text-xs text-left">
+                    <thead class="bg-slate-800 text-slate-300">
+                        <tr>
+                            <th class="p-3">Algorithm</th>
+                            <th class="p-3">Avg Waiting Time (ms)</th>
+                            <th class="p-3">Avg Turnaround Time (ms)</th>
+                            <th class="p-3">Avg Response Time (ms)</th>
+                            <th class="p-3">Context Switches</th>
+                            <th class="p-3">Balanced Score</th>
+                            <th class="p-3">Optimal Evaluation</th>
+                        </tr>
+                    </thead>
+                    <tbody id="comparisonTableBody" class="divide-y divide-slate-800 font-mono text-slate-200">
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="flex items-center justify-between text-xs text-slate-400 border-t border-slate-800 pt-4">
+                <span>💡 <strong>Real-World Trade-off:</strong> Preemptive algorithms (SRTF/RR) trade higher Context Switch Overhead for lower latency or response responsiveness.</span>
+                <button onclick="closeComparisonModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg font-medium transition">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const PROCESS_COLORS = [
+            '#38bdf8', '#4ade80', '#fbbf24', '#f87171', '#a78bfa', 
+            '#f472b6', '#2dd4bf', '#fb923c', '#818cf8', '#34d399',
+            '#e879f9', '#22d3ee', '#a3e635', '#facc15', '#f43f5e'
+        ];
+
+        class ProcessItem {
+            constructor(pid, arrivalTime, burstTime, priority = 0, color = null) {
+                this.pid = pid;
+                this.arrivalTime = parseInt(arrivalTime);
+                this.burstTime = parseInt(burstTime);
+                this.priority = parseInt(priority);
+                this.color = color || assignDefaultColor(pid);
+                this.remainingTime = this.burstTime;
+                this.currentPriority = this.priority;
+                this.startTime = -1;
+                this.completionTime = 0;
+                this.turnaroundTime = 0;
+                this.waitingTime = 0;
+                this.responseTime = -1;
+            }
+
+            clone() {
+                const p = new ProcessItem(this.pid, this.arrivalTime, this.burstTime, this.priority, this.color);
+                p.remainingTime = this.remainingTime;
+                p.currentPriority = this.currentPriority;
+                p.startTime = this.startTime;
+                p.completionTime = this.completionTime;
+                p.turnaroundTime = this.turnaroundTime;
+                p.waitingTime = this.waitingTime;
+                p.responseTime = this.responseTime;
+                return p;
+            }
+        }
+
+        function assignDefaultColor(pid) {
+            const num = parseInt(String(pid).replace(/\D/g, ''));
+            if (!isNaN(num)) {
+                return PROCESS_COLORS[(num - 1 + PROCESS_COLORS.length) % PROCESS_COLORS.length];
+            }
+            return PROCESS_COLORS[0];
+        }
+
+        let currentProcesses = [
+            new ProcessItem('P1', 0, 24, 3, PROCESS_COLORS[0]),
+            new ProcessItem('P2', 0, 3, 2, PROCESS_COLORS[1]),
+            new ProcessItem('P3', 0, 3, 1, PROCESS_COLORS[2])
+        ];
+
+        let activeSimulation = null;
+        let currentStepIndex = 0;
+        let simInterval = null;
+        let simSpeed = 500;
+        let comparisonChartInstance = null;
+        let zoomLevel = 1.0;
+
+        const tooltipEl = document.getElementById('dynamicGanttTooltip');
+        const ttColorDot = document.getElementById('ttColorDot');
+        const ttPidText = document.getElementById('ttPidText');
+        const ttBadge = document.getElementById('ttBadge');
+        const ttSpan = document.getElementById('ttSpan');
+        const ttDuration = document.getElementById('ttDuration');
+
+        function showFloatingTooltip(e, data) {
+            ttColorDot.style.backgroundColor = data.color || '#94a3b8';
+            ttPidText.innerText = data.pid;
+            ttBadge.innerText = data.state;
+            ttSpan.innerText = `${data.start}ms ➔ ${data.end}ms`;
+            ttDuration.innerText = `${data.duration} ms`;
+
+            if (data.state === 'RUNNING') {
+                ttBadge.className = 'text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
+            } else if (data.state === 'WAITING') {
+                ttBadge.className = 'text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/30';
+            } else if (data.state === 'IDLE') {
+                ttBadge.className = 'text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider bg-slate-700 text-slate-300 border border-slate-600';
+            } else {
+                ttBadge.className = 'text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider bg-slate-800 text-slate-400';
+            }
+
+            positionFloatingTooltip(e);
+            tooltipEl.style.opacity = '1';
+        }
+
+        function positionFloatingTooltip(e) {
+            tooltipEl.style.left = `${e.clientX}px`;
+            tooltipEl.style.top = `${e.clientY - 12}px`;
+        }
+
+        function hideFloatingTooltip() {
+            tooltipEl.style.opacity = '0';
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            renderProcessTable();
+            recomputeFullSimulation();
+        });
+
+        function adjustZoom(delta) {
+            zoomLevel = Math.max(0.5, Math.min(4.0, zoomLevel + delta));
+            document.getElementById('zoomDisplay').innerText = `${Math.round(zoomLevel * 100)}%`;
+            if (activeSimulation) {
+                renderSyncedGantt(activeSimulation);
+                updateStepView(currentStepIndex);
+            }
+        }
+
+        function resetZoom() {
+            zoomLevel = 1.0;
+            document.getElementById('zoomDisplay').innerText = `Fit`;
+            if (activeSimulation) {
+                renderSyncedGantt(activeSimulation);
+                updateStepView(currentStepIndex);
+            }
+        }
+
+        function getProcessColor(pid) {
+            if (pid === 'IDLE') return '#64748b';
+            const cleanPid = pid.split('(')[0];
+            const found = currentProcesses.find(p => p.pid === cleanPid);
+            if (found && found.color) return found.color;
+            return assignDefaultColor(cleanPid);
+        }
+
+        function simulateFCFS(rawList) {
+            const list = rawList.map(p => p.clone()).sort((a,b) => a.arrivalTime - b.arrivalTime || a.pid.localeCompare(b.pid));
+            let time = 0;
+            let idleTime = 0;
+            const gantt = [];
+            const trace = [];
+            const completed = [];
+
+            while (completed.length < list.length) {
+                const available = list.filter(p => p.arrivalTime <= time && p.remainingTime > 0);
+                if (available.length === 0) {
+                    const nextArrival = Math.min(...list.filter(p => p.remainingTime > 0).map(p => p.arrivalTime));
+                    while (time < nextArrival) {
+                        gantt.push({ pid: 'IDLE', start: time, end: time + 1 });
+                        trace.push({ time, runningPid: 'IDLE', readyQueue: [], completed: [...completed] });
+                        time++;
+                        idleTime++;
+                    }
+                    continue;
+                }
+
+                const currentProc = available[0];
+                if (currentProc.responseTime === -1) {
+                    currentProc.responseTime = time - currentProc.arrivalTime;
+                    currentProc.startTime = time;
+                }
+
+                const readyNow = available.slice(1).map(p => p.pid);
+                trace.push({ time, runningPid: currentProc.pid, readyQueue: readyNow, completed: [...completed] });
+                gantt.push({ pid: currentProc.pid, start: time, end: time + 1 });
+
+                currentProc.remainingTime--;
+                time++;
+
+                if (currentProc.remainingTime === 0) {
+                    currentProc.completionTime = time;
+                    currentProc.turnaroundTime = currentProc.completionTime - currentProc.arrivalTime;
+                    currentProc.waitingTime = currentProc.turnaroundTime - currentProc.burstTime;
+                    completed.push(currentProc);
+                }
+            }
+
+            return finalizeMetrics("FCFS", "FCFS", list, gantt, trace, time, idleTime);
+        }
+
+        function simulateSJF_NonPreemptive(rawList) {
+            const list = rawList.map(p => p.clone());
+            let time = 0;
+            let idleTime = 0;
+            const gantt = [];
+            const trace = [];
+            const completed = [];
+
+            while (completed.length < list.length) {
+                const available = list.filter(p => p.arrivalTime <= time && p.remainingTime > 0)
+                                      .sort((a,b) => a.burstTime - b.burstTime || a.arrivalTime - b.arrivalTime);
+
+                if (available.length === 0) {
+                    const nextArrival = Math.min(...list.filter(p => p.remainingTime > 0).map(p => p.arrivalTime));
+                    while (time < nextArrival) {
+                        gantt.push({ pid: 'IDLE', start: time, end: time + 1 });
+                        trace.push({ time, runningPid: 'IDLE', readyQueue: [], completed: [...completed] });
+                        time++;
+                        idleTime++;
+                    }
+                    continue;
+                }
+
+                const currentProc = available[0];
+                currentProc.startTime = time;
+                currentProc.responseTime = time - currentProc.arrivalTime;
+
+                while (currentProc.remainingTime > 0) {
+                    const readyNow = list.filter(p => p.arrivalTime <= time && p.remainingTime > 0 && p.pid !== currentProc.pid)
+                                         .sort((a,b) => a.burstTime - b.burstTime)
+                                         .map(p => p.pid);
+
+                    trace.push({ time, runningPid: currentProc.pid, readyQueue: readyNow, completed: [...completed] });
+                    gantt.push({ pid: currentProc.pid, start: time, end: time + 1 });
+                    currentProc.remainingTime--;
+                    time++;
+                }
+
+                currentProc.completionTime = time;
+                currentProc.turnaroundTime = currentProc.completionTime - currentProc.arrivalTime;
+                currentProc.waitingTime = currentProc.turnaroundTime - currentProc.burstTime;
+                completed.push(currentProc);
+            }
+
+            return finalizeMetrics("SJF (Non-preemptive)", "SJF_NP", list, gantt, trace, time, idleTime);
+        }
+
+        function simulateSRTF(rawList) {
+            const list = rawList.map(p => p.clone());
+            let time = 0;
+            let idleTime = 0;
+            const gantt = [];
+            const trace = [];
+            const completed = [];
+
+            while (completed.length < list.length) {
+                const available = list.filter(p => p.arrivalTime <= time && p.remainingTime > 0)
+                                      .sort((a,b) => a.remainingTime - b.remainingTime || a.arrivalTime - b.arrivalTime);
+
+                if (available.length === 0) {
+                    const nextArrival = Math.min(...list.filter(p => p.remainingTime > 0).map(p => p.arrivalTime));
+                    while (time < nextArrival) {
+                        gantt.push({ pid: 'IDLE', start: time, end: time + 1 });
+                        trace.push({ time, runningPid: 'IDLE', readyQueue: [], completed: [...completed] });
+                        time++;
+                        idleTime++;
+                    }
+                    continue;
+                }
+
+                const currentProc = available[0];
+                if (currentProc.responseTime === -1) {
+                    currentProc.responseTime = time - currentProc.arrivalTime;
+                    currentProc.startTime = time;
+                }
+
+                const readyNow = available.slice(1).map(p => p.pid);
+                trace.push({ time, runningPid: currentProc.pid, readyQueue: readyNow, completed: [...completed] });
+                gantt.push({ pid: currentProc.pid, start: time, end: time + 1 });
+
+                currentProc.remainingTime--;
+                time++;
+
+                if (currentProc.remainingTime === 0) {
+                    currentProc.completionTime = time;
+                    currentProc.turnaroundTime = currentProc.completionTime - currentProc.arrivalTime;
+                    currentProc.waitingTime = currentProc.turnaroundTime - currentProc.burstTime;
+                    completed.push(currentProc);
+                }
+            }
+
+            return finalizeMetrics("SRTF (Preemptive)", "SRTF", list, gantt, trace, time, idleTime);
+        }
+
+        function simulateRR(rawList, quantum = 4) {
+            const list = rawList.map(p => p.clone()).sort((a,b) => a.arrivalTime - b.arrivalTime);
+            let time = 0;
+            let idleTime = 0;
+            const gantt = [];
+            const trace = [];
+            const completed = [];
+            const queue = [];
+
+            let unvisited = [...list];
+
+            while (completed.length < list.length) {
+                while (unvisited.length > 0 && unvisited[0].arrivalTime <= time) {
+                    queue.push(unvisited.shift());
+                }
+
+                if (queue.length === 0) {
+                    if (unvisited.length > 0) {
+                        const nextArrival = unvisited[0].arrivalTime;
+                        while (time < nextArrival) {
+                            gantt.push({ pid: 'IDLE', start: time, end: time + 1 });
+                            trace.push({ time, runningPid: 'IDLE', readyQueue: [], completed: [...completed] });
+                            time++;
+                            idleTime++;
+                        }
+                        while (unvisited.length > 0 && unvisited[0].arrivalTime <= time) {
+                            queue.push(unvisited.shift());
+                        }
+                    }
+                    continue;
+                }
+
+                const currentProc = queue.shift();
+                if (currentProc.responseTime === -1) {
+                    currentProc.responseTime = time - currentProc.arrivalTime;
+                    currentProc.startTime = time;
+                }
+
+                const slice = Math.min(quantum, currentProc.remainingTime);
+                for (let s = 0; s < slice; s++) {
+                    const readyNow = queue.map(p => p.pid);
+                    trace.push({ time, runningPid: currentProc.pid, readyQueue: readyNow, completed: [...completed] });
+                    gantt.push({ pid: currentProc.pid, start: time, end: time + 1 });
+                    currentProc.remainingTime--;
+                    time++;
+
+                    while (unvisited.length > 0 && unvisited[0].arrivalTime <= time) {
+                        queue.push(unvisited.shift());
+                    }
+                }
+
+                if (currentProc.remainingTime === 0) {
+                    currentProc.completionTime = time;
+                    currentProc.turnaroundTime = currentProc.completionTime - currentProc.arrivalTime;
+                    currentProc.waitingTime = currentProc.turnaroundTime - currentProc.burstTime;
+                    completed.push(currentProc);
+                } else {
+                    queue.push(currentProc);
+                }
+            }
+
+            return finalizeMetrics(`Round Robin (q=${quantum})`, "RR", list, gantt, trace, time, idleTime);
+        }
+
+        function simulatePriority(rawList, isPreemptive = false, agingInterval = 0) {
+            const list = rawList.map(p => p.clone());
+            let time = 0;
+            let idleTime = 0;
+            const gantt = [];
+            const trace = [];
+            const completed = [];
+
+            while (completed.length < list.length) {
+                if (agingInterval > 0 && time > 0) {
+                    list.forEach(p => {
+                        if (p.arrivalTime <= time && p.remainingTime > 0) {
+                            const waitSoFar = time - p.arrivalTime - (p.burstTime - p.remainingTime);
+                            if (waitSoFar > 0 && waitSoFar % agingInterval === 0) {
+                                p.currentPriority = Math.max(0, p.priority - Math.floor(waitSoFar / agingInterval));
+                            }
+                        }
+                    });
+                }
+
+                const available = list.filter(p => p.arrivalTime <= time && p.remainingTime > 0)
+                                      .sort((a,b) => a.currentPriority - b.currentPriority || a.arrivalTime - b.arrivalTime);
+
+                if (available.length === 0) {
+                    const nextArrival = Math.min(...list.filter(p => p.remainingTime > 0).map(p => p.arrivalTime));
+                    while (time < nextArrival) {
+                        gantt.push({ pid: 'IDLE', start: time, end: time + 1 });
+                        trace.push({ time, runningPid: 'IDLE', readyQueue: [], completed: [...completed] });
+                        time++;
+                        idleTime++;
+                    }
+                    continue;
+                }
+
+                const currentProc = available[0];
+                if (currentProc.responseTime === -1) {
+                    currentProc.responseTime = time - currentProc.arrivalTime;
+                    currentProc.startTime = time;
+                }
+
+                if (isPreemptive) {
+                    const readyNow = available.slice(1).map(p => `${p.pid}(p:${p.currentPriority})`);
+                    trace.push({ time, runningPid: currentProc.pid, readyQueue: readyNow, completed: [...completed] });
+                    gantt.push({ pid: currentProc.pid, start: time, end: time + 1 });
+                    currentProc.remainingTime--;
+                    time++;
+
+                    if (currentProc.remainingTime === 0) {
+                        currentProc.completionTime = time;
+                        currentProc.turnaroundTime = currentProc.completionTime - currentProc.arrivalTime;
+                        currentProc.waitingTime = currentProc.turnaroundTime - currentProc.burstTime;
+                        completed.push(currentProc);
+                    }
+                } else {
+                    while (currentProc.remainingTime > 0) {
+                        const readyNow = list.filter(p => p.arrivalTime <= time && p.remainingTime > 0 && p.pid !== currentProc.pid)
+                                             .map(p => `${p.pid}(p:${p.currentPriority})`);
+                        trace.push({ time, runningPid: currentProc.pid, readyQueue: readyNow, completed: [...completed] });
+                        gantt.push({ pid: currentProc.pid, start: time, end: time + 1 });
+                        currentProc.remainingTime--;
+                        time++;
+                    }
+                    currentProc.completionTime = time;
+                    currentProc.turnaroundTime = currentProc.completionTime - currentProc.arrivalTime;
+                    currentProc.waitingTime = currentProc.turnaroundTime - currentProc.burstTime;
+                    completed.push(currentProc);
+                }
+            }
+
+            const label = isPreemptive 
+                ? (agingInterval > 0 ? `Priority Preemptive (Aging=${agingInterval})` : `Priority (Preemptive)`)
+                : `Priority (Non-preemptive)`;
+            const key = isPreemptive ? 'PRIORITY_P' : 'PRIORITY_NP';
+
+            return finalizeMetrics(label, key, list, gantt, trace, time, idleTime);
+        }
+
+        function finalizeMetrics(name, key, procList, rawGantt, trace, totalTime, idleTime) {
+            const compressedGantt = [];
+            for (let block of rawGantt) {
+                if (compressedGantt.length > 0 && compressedGantt[compressedGantt.length - 1].pid === block.pid) {
+                    compressedGantt[compressedGantt.length - 1].end = block.end;
+                } else {
+                    compressedGantt.push({ pid: block.pid, start: block.start, end: block.end });
+                }
+            }
+
+            let contextSwitches = 0;
+            for (let i = 1; i < compressedGantt.length; i++) {
+                if (compressedGantt[i].pid !== 'IDLE' && compressedGantt[i-1].pid !== 'IDLE' && compressedGantt[i].pid !== compressedGantt[i-1].pid) {
+                    contextSwitches++;
+                }
+            }
+
+            const n = procList.length;
+            const avgWT = n > 0 ? procList.reduce((acc, p) => acc + p.waitingTime, 0) / n : 0;
+            const avgTAT = n > 0 ? procList.reduce((acc, p) => acc + p.turnaroundTime, 0) / n : 0;
+            const avgRT = n > 0 ? procList.reduce((acc, p) => acc + p.responseTime, 0) / n : 0;
+            const cpuUtil = totalTime > 0 ? ((totalTime - idleTime) / totalTime) * 100 : 0;
+            const throughput = totalTime > 0 ? n / totalTime : 0;
+
+            const switchPenaltyWeight = 1.2;
+            const balancedScore = avgWT * 0.4 + avgRT * 0.4 + (contextSwitches * switchPenaltyWeight);
+
+            return {
+                algorithmName: name,
+                key: key,
+                processes: procList.sort((a,b) => a.pid.localeCompare(b.pid, undefined, { numeric: true })),
+                rawGantt,
+                ganttBlocks: compressedGantt,
+                trace,
+                totalTime,
+                idleTime,
+                avgWT,
+                avgTAT,
+                avgRT,
+                cpuUtil,
+                throughput,
+                contextSwitches,
+                balancedScore
+            };
+        }
+
+        function findOptimalAlgorithm(procList) {
+            const target = document.getElementById('evalTargetSelect').value;
+            const quantum = parseInt(document.getElementById('timeQuantum').value) || 4;
+            const aging = parseInt(document.getElementById('agingInterval').value) || 2;
+
+            const candidates = [
+                simulateRR(procList, quantum),
+                simulateSJF_NonPreemptive(procList),
+                simulateSRTF(procList),
+                simulatePriority(procList, true, aging),
+                simulatePriority(procList, false, aging),
+                simulateFCFS(procList)
+            ];
+
+            let best = null;
+            let reason = '';
+
+            if (target === 'BALANCED') {
+                candidates.sort((a, b) => a.balancedScore - b.balancedScore);
+                best = candidates[0];
+                reason = `Low latency & minimal overhead (Score: ${best.balancedScore.toFixed(1)})`;
+            } else if (target === 'RESPONSE') {
+                candidates.sort((a, b) => a.avgRT - b.avgRT || a.avgWT - b.avgWT);
+                best = candidates[0];
+                reason = `Fastest Initial Response (RT: ${best.avgRT.toFixed(2)}ms)`;
+            } else if (target === 'PRIORITY') {
+                best = candidates.find(c => c.key === 'PRIORITY_P') || candidates[0];
+                reason = `Priority & Aging Compliance Guaranteed`;
+            } else {
+                candidates.sort((a, b) => a.avgWT - b.avgWT);
+                best = candidates[0];
+                reason = `Mathematical Min AWT (${best.avgWT.toFixed(2)}ms)`;
+            }
+
+            return { candidate: best, reason: reason };
+        }
+
+        function handleTargetChange() {
+            const opt = findOptimalAlgorithm(currentProcesses);
+            document.getElementById('algoSelect').value = opt.candidate.key;
+            
+            const badge = document.getElementById('optimalNoticeBadge');
+            const hint = document.getElementById('optimalAlgoHint');
+            badge.classList.remove('hidden');
+            badge.innerText = `🏆 ${opt.candidate.algorithmName}`;
+            hint.innerText = opt.reason;
+
+            recomputeFullSimulation();
+        }
+
+        function renderProcessTable() {
+            const tbody = document.getElementById('processTableBody');
+            tbody.innerHTML = '';
+
+            currentProcesses.forEach((p, idx) => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-800/40 transition';
+                tr.innerHTML = `
+                    <td class="p-2 font-bold flex items-center gap-1.5">
+                        <span class="w-2.5 h-2.5 rounded-full inline-block flex-shrink-0" style="background-color: ${p.color}"></span>
+                        <input type="text" value="${p.pid}" onchange="updateProcessProp(${idx}, 'pid', this.value)" class="bg-transparent text-slate-100 font-mono w-16 font-bold focus:bg-slate-800 rounded px-1">
+                    </td>
+                    <td class="p-2">
+                        <input type="number" min="0" value="${p.arrivalTime}" onchange="updateProcessProp(${idx}, 'arrivalTime', this.value)" class="bg-slate-800/90 text-slate-100 font-mono w-14 rounded px-1.5 py-0.5 border border-slate-700">
+                    </td>
+                    <td class="p-2">
+                        <input type="number" min="1" value="${p.burstTime}" onchange="updateProcessProp(${idx}, 'burstTime', this.value)" class="bg-slate-800/90 text-slate-100 font-mono w-14 rounded px-1.5 py-0.5 border border-slate-700">
+                    </td>
+                    <td class="p-2">
+                        <input type="number" min="0" value="${p.priority}" onchange="updateProcessProp(${idx}, 'priority', this.value)" class="bg-slate-800/90 text-slate-100 font-mono w-14 rounded px-1.5 py-0.5 border border-slate-700">
+                    </td>
+                    <td class="p-2 text-center">
+                        <button onclick="deleteProcessRow(${idx})" class="text-rose-400 hover:text-rose-300 p-1 hover:bg-rose-950/40 rounded transition">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            document.getElementById('processCountBadge').innerText = `${currentProcesses.length} Processes`;
+        }
+
+        function updateProcessProp(index, prop, value) {
+            if (prop === 'pid') currentProcesses[index].pid = value.trim() || `P${index+1}`;
+            if (prop === 'arrivalTime') currentProcesses[index].arrivalTime = Math.max(0, parseInt(value) || 0);
+            if (prop === 'burstTime') currentProcesses[index].burstTime = Math.max(1, parseInt(value) || 1);
+            if (prop === 'priority') currentProcesses[index].priority = Math.max(0, parseInt(value) || 0);
+            
+            document.getElementById('optimalNoticeBadge').classList.add('hidden');
+            document.getElementById('optimalAlgoHint').innerText = '';
+            recomputeFullSimulation();
+        }
+
+        function addProcessRow() {
+            const nextIndex = currentProcesses.length;
+            const color = PROCESS_COLORS[nextIndex % PROCESS_COLORS.length];
+            currentProcesses.push(new ProcessItem(`P${nextIndex + 1}`, 0, 4, nextIndex + 1, color));
+            renderProcessTable();
+            recomputeFullSimulation();
+        }
+
+        function deleteProcessRow(index) {
+            if (currentProcesses.length <= 1) {
+                alert("You need at least one process to simulate.");
+                return;
+            }
+            currentProcesses.splice(index, 1);
+            renderProcessTable();
+            recomputeFullSimulation();
+        }
+
+        function clearProcesses() {
+            currentProcesses = [new ProcessItem('P1', 0, 4, 1, PROCESS_COLORS[0])];
+            document.getElementById('optimalNoticeBadge').classList.add('hidden');
+            document.getElementById('optimalAlgoHint').innerText = '';
+            renderProcessTable();
+            recomputeFullSimulation();
+        }
+
+        function generateRandomProcesses(count = 5) {
+            const generated = [];
+            for (let i = 1; i <= count; i++) {
+                generated.push(new ProcessItem(
+                    `P${i}`,
+                    Math.floor(Math.random() * 8),
+                    Math.floor(Math.random() * 10) + 2,
+                    Math.floor(Math.random() * 6) + 1,
+                    PROCESS_COLORS[(i - 1) % PROCESS_COLORS.length]
+                ));
+            }
+            currentProcesses = generated;
+            renderProcessTable();
+
+            const opt = findOptimalAlgorithm(currentProcesses);
+            const selectEl = document.getElementById('algoSelect');
+            selectEl.value = opt.candidate.key;
+
+            const badge = document.getElementById('optimalNoticeBadge');
+            const hint = document.getElementById('optimalAlgoHint');
+            badge.classList.remove('hidden');
+            badge.innerText = `🏆 ${opt.candidate.algorithmName}`;
+            hint.innerText = opt.reason;
+
+            recomputeFullSimulation();
+        }
+
+        function generateMassiveProcesses(count = 50) {
+            const generated = [];
+            for (let i = 1; i <= count; i++) {
+                generated.push(new ProcessItem(
+                    `P${i}`,
+                    Math.floor(Math.random() * 25),
+                    Math.floor(Math.random() * 8) + 1,
+                    Math.floor(Math.random() * 10) + 1,
+                    PROCESS_COLORS[(i - 1) % PROCESS_COLORS.length]
+                ));
+            }
+            currentProcesses = generated;
+            renderProcessTable();
+            
+            const opt = findOptimalAlgorithm(currentProcesses);
+            document.getElementById('algoSelect').value = opt.candidate.key;
+
+            const badge = document.getElementById('optimalNoticeBadge');
+            const hint = document.getElementById('optimalAlgoHint');
+            badge.classList.remove('hidden');
+            badge.innerText = `🏆 ${opt.candidate.algorithmName}`;
+            hint.innerText = `Evaluated on 50 processes`;
+
+            recomputeFullSimulation();
+        }
+
+        function loadPreset(key) {
+            resetSimulation();
+            document.getElementById('optimalNoticeBadge').classList.add('hidden');
+            document.getElementById('optimalAlgoHint').innerText = '';
+
+            if (key === 'convoy') {
+                currentProcesses = [
+                    new ProcessItem('P1', 0, 24, 3, PROCESS_COLORS[0]),
+                    new ProcessItem('P2', 0, 3, 2, PROCESS_COLORS[1]),
+                    new ProcessItem('P3', 0, 3, 1, PROCESS_COLORS[2])
+                ];
+                document.getElementById('algoSelect').value = 'FCFS';
+            } else if (key === 'rr_quantum') {
+                currentProcesses = [
+                    new ProcessItem('P1', 0, 10, 1, PROCESS_COLORS[0]),
+                    new ProcessItem('P2', 1, 4, 1, PROCESS_COLORS[1]),
+                    new ProcessItem('P3', 2, 5, 1, PROCESS_COLORS[2]),
+                    new ProcessItem('P4', 3, 3, 1, PROCESS_COLORS[3])
+                ];
+                document.getElementById('algoSelect').value = 'RR';
+                document.getElementById('timeQuantum').value = 4;
+                document.getElementById('quantumDisplay').innerText = '4';
+            } else if (key === 'aging') {
+                currentProcesses = [
+                    new ProcessItem('P_low', 0, 12, 10, PROCESS_COLORS[3]),
+                    new ProcessItem('P_high1', 1, 3, 1, PROCESS_COLORS[0]),
+                    new ProcessItem('P_high2', 3, 4, 1, PROCESS_COLORS[1]),
+                    new ProcessItem('P_high3', 5, 3, 1, PROCESS_COLORS[2])
+                ];
+                document.getElementById('algoSelect').value = 'PRIORITY_P';
+                document.getElementById('agingInterval').value = 3;
+                document.getElementById('agingDisplay').innerText = '3 ticks';
+            }
+            renderProcessTable();
+            handleAlgorithmChange();
+            recomputeFullSimulation();
+        }
+
+        function handleAlgorithmChange() {
+            recomputeFullSimulation();
+        }
+
+        function updateQuantum(val) {
+            document.getElementById('quantumDisplay').innerText = val;
+            recomputeFullSimulation();
+        }
+
+        function updateAging(val) {
+            document.getElementById('agingDisplay').innerText = val > 0 ? `${val} ticks` : '0 (Off)';
+            recomputeFullSimulation();
+        }
+
+        function recomputeFullSimulation() {
+            const algo = document.getElementById('algoSelect').value;
+            const quantum = parseInt(document.getElementById('timeQuantum').value) || 4;
+            const aging = parseInt(document.getElementById('agingInterval').value) || 0;
+
+            if (algo === 'FCFS') activeSimulation = simulateFCFS(currentProcesses);
+            else if (algo === 'SJF_NP') activeSimulation = simulateSJF_NonPreemptive(currentProcesses);
+            else if (algo === 'SRTF') activeSimulation = simulateSRTF(currentProcesses);
+            else if (algo === 'RR') activeSimulation = simulateRR(currentProcesses, quantum);
+            else if (algo === 'PRIORITY_NP') activeSimulation = simulatePriority(currentProcesses, false, aging);
+            else if (algo === 'PRIORITY_P') activeSimulation = simulatePriority(currentProcesses, true, aging);
+
+            document.getElementById('ganttAlgoBadge').innerText = activeSimulation.algorithmName;
+            document.getElementById('ganttTotalTime').innerText = `${activeSimulation.totalTime} ms`;
+
+            renderSyncedGantt(activeSimulation);
+            renderMetricsTable(activeSimulation.processes);
+            renderSummaryCards(activeSimulation);
+
+            resetSimulationState();
+        }
+
+        function renderSyncedGantt(simulation) {
+            const globalContainer = document.getElementById('ganttBarContainer');
+            const multiContainer = document.getElementById('multiRowGanttContainer');
+            const ticksContainer = document.getElementById('sharedTicksContainer');
+            const labelsContainer = document.getElementById('processLabelsColumn');
+            const contentWrapper = document.getElementById('timelineContentWrapper');
+
+            globalContainer.innerHTML = '';
+            multiContainer.innerHTML = '';
+            ticksContainer.innerHTML = '';
+            labelsContainer.innerHTML = '';
+
+            const totalTime = simulation.totalTime;
+            const trace = simulation.trace;
+            const processes = simulation.processes;
+            const blocks = simulation.ganttBlocks;
+            const filterRunningOnly = document.getElementById('filterRunningOnly').checked;
+
+            if (!processes || processes.length === 0 || totalTime === 0) {
+                globalContainer.innerHTML = '<div class="w-full flex items-center justify-center text-xs text-slate-500 font-mono">No simulation data available</div>';
+                return;
+            }
+
+            const minPxPerMs = Math.max(14 * zoomLevel, (1000 / totalTime) * zoomLevel);
+            const calculatedWidthPx = Math.max(920, totalTime * minPxPerMs);
+            contentWrapper.style.minWidth = `${calculatedWidthPx}px`;
+
+            // 1. Global CPU Bar
+            blocks.forEach((b) => {
+                const duration = b.end - b.start;
+                const widthPercent = (duration / totalTime) * 100;
+                const color = getProcessColor(b.pid);
+                const isIdle = b.pid === 'IDLE';
+
+                const blockEl = document.createElement('div');
+                blockEl.className = 'h-full flex flex-col items-center justify-center font-mono font-bold text-xs cursor-pointer border-r border-slate-900/80 transition hover:brightness-110 flex-shrink-0 relative overflow-hidden select-none';
+                blockEl.style.width = `${widthPercent}%`;
+                
+                if (isIdle) {
+                    blockEl.style.backgroundColor = '#111827';
+                    blockEl.style.backgroundImage = 'repeating-linear-gradient(45deg, #1e293b, #1e293b 6px, #0f172a 6px, #0f172a 12px)';
+                    blockEl.style.color = '#64748b';
+                } else {
+                    blockEl.style.backgroundColor = color;
+                    blockEl.style.color = '#0b1120';
+                    blockEl.style.boxShadow = 'inset 0 1px 0 rgba(255,255,255,0.25), inset 0 -1px 0 rgba(0,0,0,0.3)';
+                }
+
+                const approxBlockWidth = (widthPercent / 100) * calculatedWidthPx;
+                if (approxBlockWidth >= 28) {
+                    blockEl.innerHTML = `<span class="truncate px-0.5 tracking-tight">${b.pid}</span><span class="text-[9px] opacity-80">${duration}m</span>`;
+                }
+
+                blockEl.onmouseenter = (e) => {
+                    showFloatingTooltip(e, {
+                        pid: b.pid,
+                        state: isIdle ? 'IDLE' : 'RUNNING',
+                        start: b.start,
+                        end: b.end,
+                        duration: duration,
+                        color: isIdle ? '#64748b' : color
+                    });
+                    document.getElementById('ganttSliceDetail').innerText = 
+                        `[CPU Core] ${b.pid} | Span: ${b.start}ms ➔ ${b.end}ms (Duration: ${duration}ms)`;
+                };
+                blockEl.onmousemove = (e) => positionFloatingTooltip(e);
+                blockEl.onmouseleave = () => {
+                    hideFloatingTooltip();
+                    document.getElementById('ganttSliceDetail').innerText = 'Ready';
+                };
+
+                globalContainer.appendChild(blockEl);
+            });
+
+            // 2. Individual Process Tracks
+            const currentTick = currentStepIndex > 0 && trace[currentStepIndex - 1] ? trace[currentStepIndex - 1].time : 0;
+
+            processes.forEach(proc => {
+                if (filterRunningOnly && proc.completionTime <= currentTick && currentTick > 0) {
+                    return;
+                }
+
+                const label = document.createElement('div');
+                label.className = 'h-7 flex items-center justify-between font-mono text-xs font-bold text-slate-200 select-none';
+                label.innerHTML = `
+                    <div class="flex items-center gap-1.5 truncate">
+                        <span class="w-2.5 h-2.5 rounded-full inline-block flex-shrink-0 shadow" style="background-color: ${getProcessColor(proc.pid)}"></span>
+                        <span class="truncate">${proc.pid}</span>
+                    </div>
+                    <span class="text-[10px] text-slate-500 font-normal">at:${proc.arrivalTime}</span>
+                `;
+                labelsContainer.appendChild(label);
+
+                const track = document.createElement('div');
+                track.className = 'h-7 rounded-r-lg border-y border-r border-slate-800/80 bg-slate-900/60 relative flex overflow-hidden shadow-inner w-full';
+
+                const states = [];
+                for (let t = 0; t < totalTime; t++) {
+                    const step = trace[t];
+                    if (!step) {
+                        states.push('COMPLETED');
+                        continue;
+                    }
+                    if (t < proc.arrivalTime) {
+                        states.push('NOT_ARRIVED');
+                    } else if (step.runningPid === proc.pid) {
+                        states.push('RUNNING');
+                    } else if (step.readyQueue.some(qItem => qItem.split('(')[0] === proc.pid)) {
+                        states.push('WAITING');
+                    } else {
+                        states.push('COMPLETED');
+                    }
+                }
+
+                const segments = [];
+                for (let t = 0; t < states.length; t++) {
+                    const st = states[t];
+                    if (segments.length > 0 && segments[segments.length - 1].state === st) {
+                        segments[segments.length - 1].end = t + 1;
+                    } else {
+                        segments.push({ state: st, start: t, end: t + 1 });
+                    }
+                }
+
+                const procColor = getProcessColor(proc.pid);
+
+                segments.forEach(seg => {
+                    const segDuration = seg.end - seg.start;
+                    const widthPercent = (segDuration / totalTime) * 100;
+                    const approxSegWidth = (widthPercent / 100) * calculatedWidthPx;
+
+                    const segEl = document.createElement('div');
+                    segEl.className = 'h-full transition relative flex items-center justify-center font-mono text-[9px] font-bold select-none cursor-pointer flex-shrink-0 border-r border-slate-950/40';
+                    segEl.style.width = `${widthPercent}%`;
+
+                    if (seg.state === 'RUNNING') {
+                        segEl.style.backgroundColor = procColor;
+                        segEl.style.color = '#0b1120';
+                        segEl.className += ' shadow-sm hover:brightness-110';
+                        if (approxSegWidth >= 30) {
+                            segEl.innerHTML = `<span class="truncate px-0.5">${proc.pid} (${segDuration})</span>`;
+                        }
+                    } else if (seg.state === 'WAITING') {
+                        segEl.style.backgroundColor = `${procColor}18`;
+                        segEl.style.backgroundImage = `repeating-linear-gradient(45deg, ${procColor}55, ${procColor}55 4px, transparent 4px, transparent 8px)`;
+                        segEl.style.borderTop = `1.5px solid ${procColor}`;
+                        segEl.style.borderBottom = `1.5px solid ${procColor}`;
+                        segEl.style.color = '#f1f5f9';
+                        if (approxSegWidth >= 40) {
+                            segEl.innerHTML = `<span class="bg-slate-900/90 px-1 rounded text-[8px] text-slate-200 border border-slate-700/60">W:${segDuration}</span>`;
+                        }
+                    } else if (seg.state === 'NOT_ARRIVED') {
+                        segEl.style.backgroundColor = 'transparent';
+                    } else {
+                        segEl.style.backgroundColor = '#0b0f19';
+                    }
+
+                    segEl.onmouseenter = (e) => {
+                        showFloatingTooltip(e, {
+                            pid: proc.pid,
+                            state: seg.state,
+                            start: seg.start,
+                            end: seg.end,
+                            duration: segDuration,
+                            color: procColor
+                        });
+                        document.getElementById('ganttSliceDetail').innerText = 
+                            `[Process ${proc.pid}] ${seg.state} from ${seg.start}ms to ${seg.end}ms (${segDuration}ms duration)`;
+                    };
+                    segEl.onmousemove = (e) => positionFloatingTooltip(e);
+                    segEl.onmouseleave = () => {
+                        hideFloatingTooltip();
+                        document.getElementById('ganttSliceDetail').innerText = 'Ready';
+                    };
+
+                    track.appendChild(segEl);
+                });
+
+                if (proc.arrivalTime <= totalTime) {
+                    const arrivalPercent = (proc.arrivalTime / totalTime) * 100;
+                    const flag = document.createElement('div');
+                    flag.className = 'absolute top-0 bottom-0 w-[2px] bg-white pointer-events-none z-10';
+                    flag.style.left = `${arrivalPercent}%`;
+                    flag.innerHTML = `
+                        <span class="absolute -top-1 -translate-x-1/2 w-2 h-2 rounded-full bg-white ring-2 ring-indigo-500 shadow-md"></span>
+                    `;
+                    track.appendChild(flag);
+                }
+
+                multiContainer.appendChild(track);
+            });
+
+            // 3. Time Ruler
+            let tickStep = 1;
+            if (totalTime > 200) tickStep = 20;
+            else if (totalTime > 100) tickStep = 10;
+            else if (totalTime > 50) tickStep = 5;
+            else if (totalTime > 25) tickStep = 2;
+
+            for (let t = 0; t <= totalTime; t += tickStep) {
+                const leftPercent = (t / totalTime) * 100;
+                const tick = document.createElement('div');
+                tick.className = 'absolute -translate-x-1/2 flex flex-col items-center select-none';
+                tick.style.left = `${leftPercent}%`;
+                tick.innerHTML = `
+                    <span class="w-[1px] h-1.5 bg-slate-600 inline-block mb-0.5"></span>
+                    <span class="text-[9px] font-mono text-slate-400">${t}</span>
+                `;
+                ticksContainer.appendChild(tick);
+            }
+
+            if (totalTime % tickStep !== 0) {
+                const tick = document.createElement('div');
+                tick.className = 'absolute -translate-x-1/2 flex flex-col items-center select-none';
+                tick.style.left = `100%`;
+                tick.innerHTML = `
+                    <span class="w-[1px] h-1.5 bg-indigo-500 inline-block mb-0.5"></span>
+                    <span class="text-[9px] font-mono text-indigo-300 font-bold">${totalTime}</span>
+                `;
+                ticksContainer.appendChild(tick);
+            }
+        }
+
+        function renderMetricsTable(procs) {
+            const tbody = document.getElementById('metricsTableBody');
+            tbody.innerHTML = '';
+            procs.forEach(p => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-800/40 transition';
+                tr.innerHTML = `
+                    <td class="p-2 font-bold flex items-center gap-1.5">
+                        <span class="w-2 h-2 rounded-full flex-shrink-0" style="background-color: ${getProcessColor(p.pid)}"></span>
+                        ${p.pid}
+                    </td>
+                    <td class="p-2">${p.arrivalTime}</td>
+                    <td class="p-2">${p.burstTime}</td>
+                    <td class="p-2 font-bold text-slate-100">${p.completionTime}</td>
+                    <td class="p-2 text-indigo-300 font-semibold">${p.turnaroundTime}</td>
+                    <td class="p-2 text-amber-300 font-semibold">${p.waitingTime}</td>
+                    <td class="p-2 text-teal-300 font-semibold">${p.responseTime}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function renderSummaryCards(res) {
+            document.getElementById('metricAvgWT').innerHTML = `${res.avgWT.toFixed(2)} <span class="text-xs text-slate-500">ms</span>`;
+            document.getElementById('metricAvgTAT').innerHTML = `${res.avgTAT.toFixed(2)} <span class="text-xs text-slate-500">ms</span>`;
+            document.getElementById('metricAvgRT').innerHTML = `${res.avgRT.toFixed(2)} <span class="text-xs text-slate-500">ms</span>`;
+            document.getElementById('metricCPUUtil').innerHTML = `${res.cpuUtil.toFixed(1)} <span class="text-xs text-slate-500">%</span>`;
+            document.getElementById('metricContextSwitches').innerHTML = `${res.contextSwitches} <span class="text-xs text-slate-500">switches</span>`;
+        }
+
+        function resetSimulationState() {
+            pauseSimulation();
+            currentStepIndex = 0;
+            updateStepView(0);
+        }
+
+        function updateStepView(stepIdx) {
+            if (!activeSimulation || !activeSimulation.trace || activeSimulation.trace.length === 0) return;
+
+            const step = activeSimulation.trace[stepIdx] || activeSimulation.trace[activeSimulation.trace.length - 1];
+            
+            // Dispatcher Header labels
+            document.getElementById('currentTickLabel').innerText = `${step.time} ms`;
+            const badge = document.getElementById('cpuRunningBadge');
+            const statusTag = document.getElementById('cpuStatusTag');
+            
+            badge.innerText = step.runningPid;
+            const isIdle = step.runningPid === 'IDLE';
+            const procColor = isIdle ? '#64748b' : getProcessColor(step.runningPid);
+
+            if (isIdle) {
+                badge.className = 'text-xl font-black font-mono';
+                badge.style.color = '#94a3b8';
+                statusTag.innerText = 'IDLE';
+                statusTag.className = 'text-[10px] px-2 py-0.5 rounded font-mono border';
+                statusTag.style.backgroundColor = 'rgba(148, 163, 184, 0.1)';
+                statusTag.style.color = '#94a3b8';
+                statusTag.style.borderColor = 'rgba(148, 163, 184, 0.2)';
+            } else {
+                badge.className = 'text-xl font-black font-mono pulse-subtle';
+                badge.style.color = procColor;
+                
+                statusTag.innerText = 'EXECUTING';
+                statusTag.className = 'text-[10px] px-2 py-0.5 rounded font-mono border';
+                statusTag.style.color = procColor;
+                statusTag.style.borderColor = `${procColor}4d`;
+                statusTag.style.backgroundColor = `${procColor}1a`;
+            }
+
+            // Real-Time Playhead Position & Dynamic Neon Glow
+            const playhead = document.getElementById('timelinePlayhead');
+            const playheadPin = document.getElementById('playheadPin');
+            const playheadBadge = document.getElementById('playheadBadge');
+            const playheadPid = document.getElementById('playheadPidText');
+            const playheadTime = document.getElementById('playheadTimeText');
+            const ganttBar = document.getElementById('ganttBarContainer');
+
+            if (activeSimulation.totalTime > 0 && ganttBar) {
+                // คำนวณเป็น Pixel แม่นยำตรงตำแหน่งเป๊ะทั้งตอน Zoom และ Scroll
+                const totalBarWidth = ganttBar.offsetWidth;
+                const leftPx = (step.time / activeSimulation.totalTime) * totalBarWidth;
+                playhead.style.left = `${leftPx}px`;
+
+                const glowColor = isIdle ? '#94a3b8' : procColor;
+                playhead.style.backgroundColor = glowColor;
+                playhead.style.boxShadow = `0 0 10px ${glowColor}, 0 0 20px ${glowColor}`;
+
+                playheadPin.style.backgroundColor = glowColor;
+
+                playheadBadge.style.borderColor = glowColor;
+                playheadBadge.style.backgroundColor = '#090d16';
+
+                playheadPid.innerText = step.runningPid;
+                playheadPid.style.color = glowColor;
+                playheadTime.innerText = `${step.time}ms`;
+            }
+
+            // Ready Queue
+            const qContainer = document.getElementById('readyQueueItems');
+            const qCount = document.getElementById('readyQueueCount');
+            qContainer.innerHTML = '';
+            qCount.innerText = `${step.readyQueue.length} queued`;
+
+            if (step.readyQueue.length === 0) {
+                qContainer.innerHTML = '<span class="text-xs text-slate-500 italic">Queue is empty</span>';
+            } else {
+                step.readyQueue.slice(0, 15).forEach(pidLabel => {
+                    const cleanPid = pidLabel.split('(')[0];
+                    const item = document.createElement('div');
+                    item.className = 'px-2.5 py-1 rounded-lg bg-slate-800 text-xs font-mono font-bold border border-slate-700 flex items-center gap-1.5 shadow-sm flex-shrink-0';
+                    item.innerHTML = `<span class="w-2 h-2 rounded-full" style="background-color: ${getProcessColor(cleanPid)}"></span> ${pidLabel}`;
+                    qContainer.appendChild(item);
+                });
+                if (step.readyQueue.length > 15) {
+                    const more = document.createElement('span');
+                    more.className = 'text-xs text-slate-400 font-mono italic';
+                    more.innerText = `+${step.readyQueue.length - 15} more...`;
+                    qContainer.appendChild(more);
+                }
+            }
+        }
+
+        function stepSimulation() {
+            if (!activeSimulation || currentStepIndex >= activeSimulation.trace.length) return;
+            updateStepView(currentStepIndex);
+            currentStepIndex++;
+            if (currentStepIndex >= activeSimulation.trace.length) {
+                pauseSimulation();
+            }
+        }
+
+        function togglePlaySimulation() {
+            if (simInterval) {
+                pauseSimulation();
+            } else {
+                startSimulation();
+            }
+        }
+
+        function startSimulation() {
+            if (!activeSimulation) return;
+            if (currentStepIndex >= activeSimulation.trace.length) currentStepIndex = 0;
+
+            document.getElementById('playText').innerText = 'Pause';
+            document.getElementById('playIcon').innerHTML = '<path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"/>';
+            
+            simInterval = setInterval(() => {
+                if (currentStepIndex < activeSimulation.trace.length) {
+                    stepSimulation();
+                } else {
+                    pauseSimulation();
+                }
+            }, simSpeed);
+        }
+
+        function pauseSimulation() {
+            if (simInterval) {
+                clearInterval(simInterval);
+                simInterval = null;
+            }
+            document.getElementById('playText').innerText = 'Play';
+            document.getElementById('playIcon').innerHTML = '<path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"/>';
+        }
+
+        function jumpToEnd() {
+            pauseSimulation();
+            if (activeSimulation && activeSimulation.trace.length > 0) {
+                currentStepIndex = activeSimulation.trace.length - 1;
+                updateStepView(currentStepIndex);
+            }
+        }
+
+        function resetSimulation() {
+            resetSimulationState();
+        }
+
+        function setSimSpeed(ms, btn) {
+            simSpeed = ms;
+            document.querySelectorAll('.speed-btn').forEach(b => {
+                b.className = 'speed-btn px-2 py-0.5 rounded text-slate-400 hover:text-slate-200 transition';
+            });
+            btn.className = 'speed-btn px-2 py-0.5 rounded bg-slate-800 text-indigo-400 font-bold border border-slate-700 transition';
+            if (simInterval) {
+                pauseSimulation();
+                startSimulation();
+            }
+        }
+
+        function openComparisonModal() {
+            document.getElementById('comparisonModal').classList.remove('hidden');
+
+            const quantum = parseInt(document.getElementById('timeQuantum').value) || 4;
+            const aging = parseInt(document.getElementById('agingInterval').value) || 2;
+
+            const runs = [
+                simulateFCFS(currentProcesses),
+                simulateSJF_NonPreemptive(currentProcesses),
+                simulateSRTF(currentProcesses),
+                simulateRR(currentProcesses, quantum),
+                simulatePriority(currentProcesses, false, aging),
+                simulatePriority(currentProcesses, true, aging)
+            ];
+
+            const opt = findOptimalAlgorithm(currentProcesses);
+            const optimalName = opt.candidate.algorithmName;
+
+            const tbody = document.getElementById('comparisonTableBody');
+            tbody.innerHTML = '';
+
+            runs.forEach(r => {
+                const isOptimal = r.algorithmName === optimalName;
+                const tr = document.createElement('tr');
+                tr.className = isOptimal ? 'bg-indigo-950/40 border-l-4 border-indigo-500 font-bold' : 'hover:bg-slate-800/40';
+                tr.innerHTML = `
+                    <td class="p-3 font-semibold text-slate-100 flex items-center gap-1.5">
+                        ${isOptimal ? '🏆 ' : ''}${r.algorithmName}
+                    </td>
+                    <td class="p-3 text-amber-300">${r.avgWT.toFixed(2)}</td>
+                    <td class="p-3 text-indigo-300">${r.avgTAT.toFixed(2)}</td>
+                    <td class="p-3 text-teal-300">${r.avgRT.toFixed(2)}</td>
+                    <td class="p-3 text-rose-300 font-mono">${r.contextSwitches}</td>
+                    <td class="p-3 text-slate-300 font-mono">${r.balancedScore.toFixed(2)}</td>
+                    <td class="p-3">${isOptimal ? '<span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px]">OPTIMAL</span>' : '-'}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            renderComparisonChart(runs);
+        }
+
+        function renderComparisonChart(runs) {
+            const ctx = document.getElementById('comparisonChart').getContext('2d');
+            const labels = runs.map(r => r.algorithmName.replace(' (Non-preemptive)', ' NP').replace(' (Preemptive)', ' P'));
+            const wtData = runs.map(r => r.avgWT);
+            const tatData = runs.map(r => r.avgTAT);
+
+            if (comparisonChartInstance) {
+                comparisonChartInstance.destroy();
+            }
+
+            comparisonChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Average Waiting Time (ms)',
+                            data: wtData,
+                            backgroundColor: 'rgba(251, 191, 36, 0.8)',
+                            borderColor: '#fbbf24',
+                            borderWidth: 1,
+                            borderRadius: 6
+                        },
+                        {
+                            label: 'Average Turnaround Time (ms)',
+                            data: tatData,
+                            backgroundColor: 'rgba(99, 102, 241, 0.8)',
+                            borderColor: '#6366f1',
+                            borderWidth: 1,
+                            borderRadius: 6
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            ticks: { color: '#94a3b8', font: { size: 10 } },
+                            grid: { color: 'rgba(51, 65, 85, 0.3)' }
+                        },
+                        y: {
+                            ticks: { color: '#94a3b8', font: { size: 10 } },
+                            grid: { color: 'rgba(51, 65, 85, 0.3)' }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            labels: { color: '#e2e8f0', font: { size: 11 } }
+                        }
+                    }
+                }
+            });
+        }
+
+        function closeComparisonModal() {
+            document.getElementById('comparisonModal').classList.add('hidden');
+        }
+    </script>
+</body>
+</html>
