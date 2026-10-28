@@ -26,7 +26,7 @@
         }
     </script>
     <!-- Chart.js for Multi-Algorithm Benchmark -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -149,7 +149,7 @@
                     <button onclick="setSimSpeed(1000, this)" class="speed-btn px-2 py-0.5 rounded text-slate-400 hover:text-slate-200 transition">0.5x</button>
                     <button onclick="setSimSpeed(500, this)" class="speed-btn px-2 py-0.5 rounded bg-slate-800 text-indigo-400 font-bold border border-slate-700 transition">1x</button>
                     <button onclick="setSimSpeed(100, this)" class="speed-btn px-2 py-0.5 rounded text-slate-400 hover:text-slate-200 transition">5x</button>
-                    <button onclick="setSimSpeed(20, this)" class="speed-btn px-2 py-0.5 rounded text-slate-400 hover:text-slate-200 transition">20x</button>
+                    <button onclick="setSimSpeed(25, this)" class="speed-btn px-2 py-0.5 rounded text-slate-400 hover:text-slate-200 transition">20x</button>
                 </div>
             </div>
 
@@ -320,7 +320,7 @@
                     <!-- Zoom Controls & View Filter -->
                     <div class="flex items-center space-x-2">
                         <div class="flex items-center space-x-1.5 bg-slate-950 px-2.5 py-1 rounded-xl border border-slate-800 text-xs">
-                            <input type="checkbox" id="filterRunningOnly" onchange="recomputeFullSimulation()" class="accent-indigo-500 cursor-pointer rounded">
+                            <input type="checkbox" id="filterRunningOnly" onchange="handleFilterChange()" class="accent-indigo-500 cursor-pointer rounded">
                             <label for="filterRunningOnly" class="text-[11px] text-slate-300 cursor-pointer select-none">Hide Finished</label>
                         </div>
 
@@ -531,17 +531,14 @@
                 this.responseTime = -1;
             }
 
+            // Fresh copy from the configured values only, so edits to burst/priority always take effect
             clone() {
-                const p = new ProcessItem(this.pid, this.arrivalTime, this.burstTime, this.priority, this.color);
-                p.remainingTime = this.remainingTime;
-                p.currentPriority = this.currentPriority;
-                p.startTime = this.startTime;
-                p.completionTime = this.completionTime;
-                p.turnaroundTime = this.turnaroundTime;
-                p.waitingTime = this.waitingTime;
-                p.responseTime = this.responseTime;
-                return p;
+                return new ProcessItem(this.pid, this.arrivalTime, this.burstTime, this.priority, this.color);
             }
+        }
+
+        function escapeHtml(str) {
+            return String(str).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
         }
 
         function assignDefaultColor(pid) {
@@ -564,6 +561,7 @@
         let simSpeed = 500;
         let comparisonChartInstance = null;
         let zoomLevel = 1.0;
+        let renderedHiddenCount = 0;
 
         const tooltipEl = document.getElementById('dynamicGanttTooltip');
         const ttColorDot = document.getElementById('ttColorDot');
@@ -625,6 +623,23 @@
             }
         }
 
+        // currentStepIndex is the trace entry on screen; trace.length means "finished" (time = totalTime)
+        function getCurrentSimTime() {
+            if (!activeSimulation) return 0;
+            const step = activeSimulation.trace[currentStepIndex];
+            return step ? step.time : activeSimulation.totalTime;
+        }
+
+        function isProcessHidden(proc, time) {
+            return time > 0 && proc.completionTime <= time;
+        }
+
+        function handleFilterChange() {
+            if (!activeSimulation) return;
+            renderSyncedGantt(activeSimulation);
+            updateStepView(currentStepIndex);
+        }
+
         function getProcessColor(pid) {
             if (pid === 'IDLE') return '#64748b';
             const cleanPid = pid.split('(')[0];
@@ -634,7 +649,7 @@
         }
 
         function simulateFCFS(rawList) {
-            const list = rawList.map(p => p.clone()).sort((a,b) => a.arrivalTime - b.arrivalTime || a.pid.localeCompare(b.pid));
+            const list = rawList.map(p => p.clone()).sort((a,b) => a.arrivalTime - b.arrivalTime || a.pid.localeCompare(b.pid, undefined, { numeric: true }));
             let time = 0;
             let idleTime = 0;
             const gantt = [];
@@ -849,9 +864,7 @@
                     list.forEach(p => {
                         if (p.arrivalTime <= time && p.remainingTime > 0) {
                             const waitSoFar = time - p.arrivalTime - (p.burstTime - p.remainingTime);
-                            if (waitSoFar > 0 && waitSoFar % agingInterval === 0) {
-                                p.currentPriority = Math.max(0, p.priority - Math.floor(waitSoFar / agingInterval));
-                            }
+                            p.currentPriority = Math.max(0, p.priority - Math.floor(Math.max(0, waitSoFar) / agingInterval));
                         }
                     });
                 }
@@ -905,9 +918,9 @@
                 }
             }
 
-            const label = isPreemptive 
+            const label = isPreemptive
                 ? (agingInterval > 0 ? `Priority Preemptive (Aging=${agingInterval})` : `Priority (Preemptive)`)
-                : `Priority (Non-preemptive)`;
+                : (agingInterval > 0 ? `Priority Non-preemptive (Aging=${agingInterval})` : `Priority (Non-preemptive)`);
             const key = isPreemptive ? 'PRIORITY_P' : 'PRIORITY_NP';
 
             return finalizeMetrics(label, key, list, gantt, trace, time, idleTime);
@@ -962,7 +975,7 @@
         function findOptimalAlgorithm(procList) {
             const target = document.getElementById('evalTargetSelect').value;
             const quantum = parseInt(document.getElementById('timeQuantum').value) || 4;
-            const aging = parseInt(document.getElementById('agingInterval').value) || 2;
+            const aging = parseInt(document.getElementById('agingInterval').value) || 0;
 
             const candidates = [
                 simulateRR(procList, quantum),
@@ -986,7 +999,7 @@
                 reason = `Fastest Initial Response (RT: ${best.avgRT.toFixed(2)}ms)`;
             } else if (target === 'PRIORITY') {
                 best = candidates.find(c => c.key === 'PRIORITY_P') || candidates[0];
-                reason = `Priority & Aging Compliance Guaranteed`;
+                reason = aging > 0 ? `Priority & Aging Compliance Guaranteed` : `Strict Priority Compliance (Aging Off)`;
             } else {
                 candidates.sort((a, b) => a.avgWT - b.avgWT);
                 best = candidates[0];
@@ -1019,7 +1032,7 @@
                 tr.innerHTML = `
                     <td class="p-2 font-bold flex items-center gap-1.5">
                         <span class="w-2.5 h-2.5 rounded-full inline-block flex-shrink-0" style="background-color: ${p.color}"></span>
-                        <input type="text" value="${p.pid}" onchange="updateProcessProp(${idx}, 'pid', this.value)" class="bg-transparent text-slate-100 font-mono w-16 font-bold focus:bg-slate-800 rounded px-1">
+                        <input type="text" value="${escapeHtml(p.pid)}" onchange="updateProcessProp(${idx}, 'pid', this.value)" class="bg-transparent text-slate-100 font-mono w-16 font-bold focus:bg-slate-800 rounded px-1">
                     </td>
                     <td class="p-2">
                         <input type="number" min="0" value="${p.arrivalTime}" onchange="updateProcessProp(${idx}, 'arrivalTime', this.value)" class="bg-slate-800/90 text-slate-100 font-mono w-14 rounded px-1.5 py-0.5 border border-slate-700">
@@ -1043,7 +1056,16 @@
         }
 
         function updateProcessProp(index, prop, value) {
-            if (prop === 'pid') currentProcesses[index].pid = value.trim() || `P${index+1}`;
+            if (prop === 'pid') {
+                // '(' and ')' are reserved for the "(p:N)" priority suffix in ready-queue labels
+                const newPid = value.trim().replace(/[()]/g, '') || `P${index+1}`;
+                if (currentProcesses.some((p, i) => i !== index && p.pid === newPid)) {
+                    alert(`PID "${newPid}" is already in use. Each process needs a unique PID.`);
+                    renderProcessTable();
+                    return;
+                }
+                currentProcesses[index].pid = newPid;
+            }
             if (prop === 'arrivalTime') currentProcesses[index].arrivalTime = Math.max(0, parseInt(value) || 0);
             if (prop === 'burstTime') currentProcesses[index].burstTime = Math.max(1, parseInt(value) || 1);
             if (prop === 'priority') currentProcesses[index].priority = Math.max(0, parseInt(value) || 0);
@@ -1054,9 +1076,10 @@
         }
 
         function addProcessRow() {
-            const nextIndex = currentProcesses.length;
-            const color = PROCESS_COLORS[nextIndex % PROCESS_COLORS.length];
-            currentProcesses.push(new ProcessItem(`P${nextIndex + 1}`, 0, 4, nextIndex + 1, color));
+            let num = currentProcesses.length + 1;
+            while (currentProcesses.some(p => p.pid === `P${num}`)) num++;
+            const color = PROCESS_COLORS[(num - 1) % PROCESS_COLORS.length];
+            currentProcesses.push(new ProcessItem(`P${num}`, 0, 4, num, color));
             renderProcessTable();
             recomputeFullSimulation();
         }
@@ -1256,7 +1279,7 @@
 
                 const approxBlockWidth = (widthPercent / 100) * calculatedWidthPx;
                 if (approxBlockWidth >= 28) {
-                    blockEl.innerHTML = `<span class="truncate px-0.5 tracking-tight">${b.pid}</span><span class="text-[9px] opacity-80">${duration}m</span>`;
+                    blockEl.innerHTML = `<span class="truncate px-0.5 tracking-tight">${escapeHtml(b.pid)}</span><span class="text-[9px] opacity-80">${duration}m</span>`;
                 }
 
                 blockEl.onmouseenter = (e) => {
@@ -1281,10 +1304,12 @@
             });
 
             // 2. Individual Process Tracks
-            const currentTick = currentStepIndex > 0 && trace[currentStepIndex - 1] ? trace[currentStepIndex - 1].time : 0;
+            const currentTick = getCurrentSimTime();
+            renderedHiddenCount = 0;
 
             processes.forEach(proc => {
-                if (filterRunningOnly && proc.completionTime <= currentTick && currentTick > 0) {
+                if (filterRunningOnly && isProcessHidden(proc, currentTick)) {
+                    renderedHiddenCount++;
                     return;
                 }
 
@@ -1293,7 +1318,7 @@
                 label.innerHTML = `
                     <div class="flex items-center gap-1.5 truncate">
                         <span class="w-2.5 h-2.5 rounded-full inline-block flex-shrink-0 shadow" style="background-color: ${getProcessColor(proc.pid)}"></span>
-                        <span class="truncate">${proc.pid}</span>
+                        <span class="truncate">${escapeHtml(proc.pid)}</span>
                     </div>
                     <span class="text-[10px] text-slate-500 font-normal">at:${proc.arrivalTime}</span>
                 `;
@@ -1346,7 +1371,7 @@
                         segEl.style.color = '#0b1120';
                         segEl.className += ' shadow-sm hover:brightness-110';
                         if (approxSegWidth >= 30) {
-                            segEl.innerHTML = `<span class="truncate px-0.5">${proc.pid} (${segDuration})</span>`;
+                            segEl.innerHTML = `<span class="truncate px-0.5">${escapeHtml(proc.pid)} (${segDuration})</span>`;
                         }
                     } else if (seg.state === 'WAITING') {
                         segEl.style.backgroundColor = `${procColor}18`;
@@ -1438,7 +1463,7 @@
                 tr.innerHTML = `
                     <td class="p-2 font-bold flex items-center gap-1.5">
                         <span class="w-2 h-2 rounded-full flex-shrink-0" style="background-color: ${getProcessColor(p.pid)}"></span>
-                        ${p.pid}
+                        ${escapeHtml(p.pid)}
                     </td>
                     <td class="p-2">${p.arrivalTime}</td>
                     <td class="p-2">${p.burstTime}</td>
@@ -1468,21 +1493,30 @@
         function updateStepView(stepIdx) {
             if (!activeSimulation || !activeSimulation.trace || activeSimulation.trace.length === 0) return;
 
-            const step = activeSimulation.trace[stepIdx] || activeSimulation.trace[activeSimulation.trace.length - 1];
-            
+            const isDone = stepIdx >= activeSimulation.trace.length;
+            const step = isDone
+                ? { time: activeSimulation.totalTime, runningPid: 'DONE', readyQueue: [] }
+                : activeSimulation.trace[stepIdx];
+
+            // Keep "Hide Finished" in sync while playing
+            if (document.getElementById('filterRunningOnly').checked) {
+                const hiddenNow = activeSimulation.processes.filter(p => isProcessHidden(p, step.time)).length;
+                if (hiddenNow !== renderedHiddenCount) renderSyncedGantt(activeSimulation);
+            }
+
             // Dispatcher Header labels
             document.getElementById('currentTickLabel').innerText = `${step.time} ms`;
             const badge = document.getElementById('cpuRunningBadge');
             const statusTag = document.getElementById('cpuStatusTag');
-            
+
             badge.innerText = step.runningPid;
-            const isIdle = step.runningPid === 'IDLE';
+            const isIdle = step.runningPid === 'IDLE' || isDone;
             const procColor = isIdle ? '#64748b' : getProcessColor(step.runningPid);
 
             if (isIdle) {
                 badge.className = 'text-xl font-black font-mono';
                 badge.style.color = '#94a3b8';
-                statusTag.innerText = 'IDLE';
+                statusTag.innerText = isDone ? 'FINISHED' : 'IDLE';
                 statusTag.className = 'text-[10px] px-2 py-0.5 rounded font-mono border';
                 statusTag.style.backgroundColor = 'rgba(148, 163, 184, 0.1)';
                 statusTag.style.color = '#94a3b8';
@@ -1539,7 +1573,7 @@
                     const cleanPid = pidLabel.split('(')[0];
                     const item = document.createElement('div');
                     item.className = 'px-2.5 py-1 rounded-lg bg-slate-800 text-xs font-mono font-bold border border-slate-700 flex items-center gap-1.5 shadow-sm flex-shrink-0';
-                    item.innerHTML = `<span class="w-2 h-2 rounded-full" style="background-color: ${getProcessColor(cleanPid)}"></span> ${pidLabel}`;
+                    item.innerHTML = `<span class="w-2 h-2 rounded-full" style="background-color: ${getProcessColor(cleanPid)}"></span> ${escapeHtml(pidLabel)}`;
                     qContainer.appendChild(item);
                 });
                 if (step.readyQueue.length > 15) {
@@ -1553,8 +1587,8 @@
 
         function stepSimulation() {
             if (!activeSimulation || currentStepIndex >= activeSimulation.trace.length) return;
-            updateStepView(currentStepIndex);
             currentStepIndex++;
+            updateStepView(currentStepIndex);
             if (currentStepIndex >= activeSimulation.trace.length) {
                 pauseSimulation();
             }
@@ -1570,7 +1604,10 @@
 
         function startSimulation() {
             if (!activeSimulation) return;
-            if (currentStepIndex >= activeSimulation.trace.length) currentStepIndex = 0;
+            if (currentStepIndex >= activeSimulation.trace.length) {
+                currentStepIndex = 0;
+                updateStepView(0);
+            }
 
             document.getElementById('playText').innerText = 'Pause';
             document.getElementById('playIcon').innerHTML = '<path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"/>';
@@ -1596,7 +1633,7 @@
         function jumpToEnd() {
             pauseSimulation();
             if (activeSimulation && activeSimulation.trace.length > 0) {
-                currentStepIndex = activeSimulation.trace.length - 1;
+                currentStepIndex = activeSimulation.trace.length;
                 updateStepView(currentStepIndex);
             }
         }
@@ -1621,7 +1658,7 @@
             document.getElementById('comparisonModal').classList.remove('hidden');
 
             const quantum = parseInt(document.getElementById('timeQuantum').value) || 4;
-            const aging = parseInt(document.getElementById('agingInterval').value) || 2;
+            const aging = parseInt(document.getElementById('agingInterval').value) || 0;
 
             const runs = [
                 simulateFCFS(currentProcesses),

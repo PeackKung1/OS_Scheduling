@@ -20,7 +20,7 @@ xdg-open cpu_scheduling_simulator.html
 | **SJF** – Shortest-Job-First | Non-preemptive | Burst time น้อยที่สุด | Arrival time |
 | **SRTF** – Shortest-Remaining-Time-First | Preemptive | Remaining time น้อยที่สุด (เช็คทุก 1 ms) | Arrival time |
 | **RR** – Round Robin | Preemptive | วนตามคิว ทีละ time quantum (q) | ลำดับในคิว |
-| **Priority** | Non-preemptive | ค่า priority น้อยที่สุด (= สำคัญที่สุด) | Arrival time |
+| **Priority** (+ Aging ถ้าเปิด) | Non-preemptive | ค่า priority น้อยที่สุด (= สำคัญที่สุด) | Arrival time |
 | **Priority + Aging** | Preemptive | ค่า priority น้อยที่สุด (เช็คทุก 1 ms) | Arrival time |
 
 - **Round Robin:** process ที่มาถึงระหว่าง quantum จะเข้าคิว *ก่อน* process ที่เพิ่งถูก preempt
@@ -32,6 +32,7 @@ xdg-open cpu_scheduling_simulator.html
 - แก้ PID, Arrival Time (AT), Burst Time (BT) และ Priority ได้ในตาราง
 - **+ Add** เพิ่ม process, **🎲 Random** สุ่ม 5 process, **Clear** เหลือ process เดียว
 - ค่า Priority ยิ่ง **น้อย** ยิ่งสำคัญ
+- PID ต้องไม่ซ้ำกัน และห้ามมีวงเล็บ `(` `)`
 
 ### 2. Preset สำหรับสาธิต
 | Preset | สิ่งที่แสดง |
@@ -52,7 +53,8 @@ xdg-open cpu_scheduling_simulator.html
 |---|---|
 | **Step (+1)** | เดินไปข้างหน้า 1 ms |
 | **Play / Pause** | เล่นอัตโนมัติตามความเร็วที่เลือก (0.5x / 1x / 5x / 20x) |
-| **⏭ Finish** | กระโดดไปเวลาสุดท้าย |
+| **⏭ Finish** | กระโดดไปเวลาสุดท้าย (CPU แสดงสถานะ FINISHED) |
+| **Hide Finished** | ซ่อนแถวของ process ที่ทำงานเสร็จแล้ว ณ เวลาปัจจุบัน (อัปเดตตามระหว่างเล่น) |
 | **↺ Reset** | กลับไปเวลา 0 |
 | **− / + / Fit** | ซูม timeline |
 
@@ -96,13 +98,4 @@ xdg-open cpu_scheduling_simulator.html
 
 - HTML + Vanilla JavaScript
 - [Tailwind CSS](https://tailwindcss.com/) (CDN)
-- [Chart.js](https://www.chartjs.org/) สำหรับกราฟเปรียบเทียบ
-
-## Known Issues
-
-- แก้ค่า Burst Time หรือ Priority ในตารางแล้วผล simulation ไม่เปลี่ยน (`clone()` คัดลอก `remainingTime` / `currentPriority` ค่าเก่าไปด้วย)
-- กด **+ Add** หลังลบ process อาจได้ PID ซ้ำ และไม่มีการเช็ค PID ซ้ำตอนแก้ชื่อ
-- Aging ในโหมด Non-preemptive แทบไม่ทำงาน (เงื่อนไข `% agingInterval === 0`)
-- เมื่อ Aging = 0 ส่วน Best Algorithm และหน้า Compare จะคำนวณด้วย aging = 2 แทน
-- กด Step ครั้งแรกไม่เดิน, Finish หยุดก่อนเวลาสุดท้าย 1 ms และ Zoom ทำให้ playhead เลื่อนไป 1 tick
-- Checkbox "Hide Finished" reset playback และไม่อัปเดตระหว่างเล่น
+- [Chart.js](https://www.chartjs.org/) 4.4.1 สำหรับกราฟเปรียบเทียบ
